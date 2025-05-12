@@ -1,5 +1,6 @@
 from datasets import LinearRegressionDataset, LogisticRegressionDataset, make_loaders
 from models import LinearRegressionModel, LogisticRegressionModel
+from utils import plot_training_validation_losses
 
 
 import torch
