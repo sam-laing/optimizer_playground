@@ -4,3 +4,10 @@ __pycache__/
 *.pyo
 *.pyd
 plots/
+
+# ignore anything related to jupyter notebook
+.ipynb_checkpoints
+*.ipynb
+*.ipynb_checkpoints
+# ignore any virtual environment folders
+venv/
