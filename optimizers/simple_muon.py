@@ -29,8 +29,16 @@ class SimpleMuon(torch.optim.Optimizer):
     """
     Simplified Muon optimizer for CPU/local training.
     """
-    def __init__(self, params, lr=0.02, weight_decay=0.01, momentum=0.95, nesterov=True, ns_steps=5):
-        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps)
+    def __init__(
+            self, params, lr=0.02, weight_decay=0.01, momentum=0.95, nesterov=True, ns_steps=5, zero_init=True
+        ):
+        assert lr > 0, "Learning rate must be positive"
+        assert 0 <= weight_decay, "Weight decay must be non-negative"
+        assert 0 <= momentum < 1, "Momentum must be in [0, 1)"
+        assert ns_steps > 0 and isinstance(ns_steps, int), "Number of steps must be positive"
+        defaults = dict(
+            lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=nesterov, ns_steps=ns_steps, zero_init=zero_init,
+            )
         super().__init__(params, defaults)
 
     @torch.no_grad()
@@ -43,17 +51,19 @@ class SimpleMuon(torch.optim.Optimizer):
                 grad = p.grad
                 state = self.state[p]
                 
-                # Initialize momentum buffer
                 if 'momentum_buffer' not in state:
-                    state['momentum_buffer'] = torch.zeros_like(p)
+                    if group['zero_init']:
+                        state['momentum_buffer'] = torch.zeros_like(p)
+                    else:
+                        state['momentum_buffer'] = grad.clone()
                 
                 buf = state['momentum_buffer']
                 
-                # Weight decay
+                #weight decay
                 if group['weight_decay'] != 0:
                     grad = grad.add(p, alpha=group['weight_decay'])
                 
-                # Momentum update
+                #momentum update
                 buf.mul_(group['momentum']).add_(grad, alpha=1 - group['momentum'])
                 
                 # Nesterov momentum
