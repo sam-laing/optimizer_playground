@@ -10,7 +10,8 @@ A comprehensive benchmarking suite for optimization algorithms, with particular 
 
 - **Linear Regression** on synthetic data
   - $Y = XW + \varepsilon$ where $Y \in \mathbb{R}^{N \times D}$, $X \in \mathbb{R}^{N \times (d+1)}$, $W \in \mathbb{R}^{(d+1) \times D}$, $\varepsilon \in \mathbb{R}^{N\times D}$
-  - $X \sim$ zero centred distribution (typically normal but also supporting Laplace and Uniform), $\varepsilon\sim$ noise_level* zero centred distribution  
+  - $X \sim$ zero centred distribution (typically normal but also supporting Laplace and Uniform), $\varepsilon\sim$ noise_level* zero centred distribution 
+  - Added an option to enforce feature covariance: basically interested in if fancier optimizers are more likely to benefit from this dirtier less clear cut case of non iid data  
 
 - **Logistic Regression** on synthetic data 
 
