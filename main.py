@@ -9,6 +9,7 @@ import torch.nn as nn
 
 import torch.optim as optim
 from torch import Tensor
+from optimizers import SimpleMuon
 
 
 
@@ -27,6 +28,7 @@ def loss_function(W, X, Y):
 def compare_optimizers(
         optimizers_dict: dict,  # Format: {'optim_name': (optim_class, optim_kwargs)}
         dataset: LinearRegressionDataset,
+        device: str = "cpu",
         batch_size: int = 128,
         epochs: int = 10,
         model_seed: int = 99,
@@ -114,7 +116,7 @@ def compare_optimizers(
             dim_output=dataset.dim_output,
             seed=model_seed
         )
-        models[cfg_name] = model
+        models[cfg_name] = model.to(device)
         optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
 
 
@@ -123,6 +125,7 @@ def compare_optimizers(
 
     for epoch in range(epochs):
         for i, (X, Y) in enumerate(train_loader):
+            X, Y = X.to(device), Y.to(device)
             current_losses = {}
             for name, model in models.items():
                 out = model(X)
@@ -142,6 +145,7 @@ def compare_optimizers(
             val_loss = 0
             with torch.no_grad():
                 for X_val, Y_val in val_loader:
+                    X_val, Y_val = X_val.to(device), Y_val.to(device)
                     out = model(X_val)
                     val_loss += loss_function(model.get_weights(), X_val, Y_val).item()
             
@@ -162,24 +166,25 @@ if __name__ == "__main__":
     # Example usage
     dataset = LinearRegressionDataset(
         dim_input=200,
-        dim_output=10,
+        dim_output=20,
         N_samples=10_000,
         noise_type="gaussian",
-        noise_level=0.01,
+        noise_level=0.1,
         weight_init="gaussian",
-        seed=42
+        seed=222, 
+        covariance_type="full", 
+        covariance_strength=0.7
     )
-    from optimizers import SimpleMuon
     
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.01, "weight_decay": 0.01
+            "lr": 0.1, "weight_decay": 0.1, "momentum": 0
             }),
         "AdamW": (optim.AdamW, {
-            "lr": 0.001, "weight_decay": 0.01
+            "lr": 0.01, "weight_decay": 0.1, "betas": (0, 0)
             }),
         "SimpleMuon": (SimpleMuon, {
-            "lr": 0.01, "weight_decay": 0.01, "momentum": 0.9
+            "lr": 0.1, "weight_decay": 0.1, "momentum": 0
             }),
     }
     
@@ -187,8 +192,30 @@ if __name__ == "__main__":
         optimizers_dict,
         dataset,
         batch_size=128,
-        epochs=5,
+        epochs=10,
         model_seed=99,
         val_size=0.2,
-        shuffle=True
+        shuffle=True, 
+  
     )
+    extended_title = f"Linear Regression Losses\n" \
+        f"Dataset: {dataset.__class__.__name__}\n" \
+        f"Optimizer: {', '.join(optimizers_dict.keys())}\n" \
+        f"Epochs: {10}, Batch size: {128}, N_samples: {dataset.N_samples}\n" \
+        f"Noise type: {dataset.noise_type}, Noise level: {dataset.noise_level}\n" \
+        f"Weight init: {dataset.weight_init}, Seed: {dataset.seed}\n"
+    extended_title += f"Covariance type: {dataset.covariance_type}, Covariance strength: {dataset.covariance_strength}\n"
+
+    plot_training_validation_losses(
+        title=extended_title,
+        losses=losses,
+        val_losses=val_losses,
+        batch_size=128,
+        n_samples=dataset.N_samples,
+        val_size=0.2,
+        figsize=(12, 6),
+        ylim=None,
+        style='default',
+        save_path=f"./plots/linear_regression/linear_regression_losses.png", 
+        show=False
+        )
