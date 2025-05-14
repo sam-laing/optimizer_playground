@@ -11,3 +11,8 @@ plots/
 *.ipynb_checkpoints
 # ignore any virtual environment folders
 venv/
+
+
+#ignore any data folders
+data/
+/data/
