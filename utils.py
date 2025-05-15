@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 def plot_training_validation_losses(
     title, losses, val_losses, batch_size, n_samples, val_size=0.2,
-    figsize=(12, 6), ylim=None, style='default', save_path=None 
+    figsize=(12, 6), ylim=None, style='default', save_path=None, show=False
 
 ):
     """
@@ -70,5 +71,5 @@ def plot_training_validation_losses(
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {save_path}")
-    
-    plt.show()
+    if show: 
+        plt.show()

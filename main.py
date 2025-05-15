@@ -12,8 +12,6 @@ from torch import Tensor
 from optimizers import SimpleMuon
 
 
-
-
 def loss_function(W, X, Y):
     """
     Objective function for linear regression problem
@@ -23,8 +21,6 @@ def loss_function(W, X, Y):
     return loss
 
 
-
-
 def compare_optimizers(
         optimizers_dict: dict,  # Format: {'optim_name': (optim_class, optim_kwargs)}
         dataset: LinearRegressionDataset,
@@ -32,6 +28,7 @@ def compare_optimizers(
         batch_size: int = 128,
         epochs: int = 10,
         model_seed: int = 99,
+        sampler_seed: int = 99,
         val_size: int = 0.2,
         shuffle: bool = True,
 
@@ -51,11 +48,10 @@ def compare_optimizers(
     Returns:   
         Dictionary containing loss histories for each optimizer
     """
-    # Create data loaders
-    
+    #dataloading 
     if val_size is not None:
         train_loader, val_loader = make_loaders(
-            dataset, batch_size=batch_size, seed=model_seed, val_size=val_size, shuffle=shuffle
+            dataset, batch_size=batch_size, seed=sampler_seed, val_size=val_size, shuffle=shuffle
         )
     else:
         raise ValueError("val_size must be in (0,1)... won't accept no val")
@@ -111,11 +107,29 @@ def compare_optimizers(
         elif momentum is not None:
             cfg_name += f", momentum:{momentum}"
 
-        model = LinearRegressionModel(
-            dim_input=dataset.dim_input,
-            dim_output=dataset.dim_output,
-            seed=model_seed
-        )
+        if isinstance(dataset, LinearRegressionDataset):
+            model = LinearRegressionModel(
+                dim_input=dataset.dim_input,
+                dim_output=dataset.dim_output,
+                seed=model_seed
+            )
+        elif isinstance(dataset, LogisticRegressionDataset):    
+            model = LogisticRegressionModel(
+                dim_input=dataset.dim_input, 
+                num_classes=dataset.num_classes,
+                seed=model_seed
+            )
+        
+        elif isinstance(dataset, MnistDataset):
+            from models.simpleMLP import SimpleMLP
+            model = SimpleMLP(
+                dim_input=dataset.dim_input,
+                dim_output=dataset.dim_output,
+                seed=model_seed
+            )
+        else:
+            raise ValueError("Unknown dataset type")
+
         models[cfg_name] = model.to(device)
         optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
 
@@ -163,45 +177,86 @@ def compare_optimizers(
 
 
 if __name__ == "__main__":
-    # Example usage
-    dataset = LinearRegressionDataset(
-        dim_input=200,
-        dim_output=20,
-        N_samples=10_000,
-        noise_type="gaussian",
-        noise_level=0.1,
-        weight_init="gaussian",
-        seed=222, 
-        covariance_type="full", 
-        covariance_strength=0.7
-    )
-    
+    from dataclasses import dataclass
+
+
+    @dataclass
+    class Config:
+        dim_input: int
+        dim_output: int
+        N_samples: int
+        noise_type: str
+        noise_level: float
+        weight_init: str
+        seed: int
+        covariance_type: str = None
+        covariance_strength: float = 0.5
+        batch_size: int = 128
+        epochs: int = 10
+        model_seed: int = 99
+        val_size: float = 0.2
+        shuffle: bool = True
+        device: str = "cpu"
+
+    DATASET_TYPE = "logistic"  # or "logistic"
+
+
+    if DATASET_TYPE == "linear":
+        dataset = LinearRegressionDataset(
+            dim_input=200,
+            dim_output=10,
+            N_samples=30_000,
+            noise_type="gaussian",
+            noise_level=0.01,
+            weight_init="gaussian",
+            seed=42
+        )
+    elif DATASET_TYPE == "logistic":
+        dataset = LogisticRegressionDataset(
+            dim_input=200,
+            num_classes=10,
+            #dim_output=90,
+            N_samples=30_000,
+            noise_type="uniform",
+            noise_level=0.9,
+            weight_init="gaussian",
+            seed=156, 
+            covariance_type="full", 
+            covariance_strength=0.99
+        )
+    elif DATASET_TYPE == "mnist":
+        from datasets import MnistDataset
+        dataset = MnistDataset(root = "./data", train=True)
+        
+
+        
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.1, "weight_decay": 0.1, "momentum": 0
+            "lr": 0.05, "weight_decay": 0.1, "momentum": 0.9
             }),
         "AdamW": (optim.AdamW, {
-            "lr": 0.01, "weight_decay": 0.1, "betas": (0, 0)
+            "lr": 0.01, "weight_decay": 0.1, "betas": (0.9, 0.999)
             }),
         "SimpleMuon": (SimpleMuon, {
-            "lr": 0.1, "weight_decay": 0.1, "momentum": 0
+            "lr": 0.1, "weight_decay": 0.1, "momentum": 0.8
             }),
     }
+    BATCH_SIZE = 128
     
     losses, val_losses = compare_optimizers(
         optimizers_dict,
         dataset,
-        batch_size=128,
+        batch_size=BATCH_SIZE,
         epochs=10,
         model_seed=99,
         val_size=0.2,
         shuffle=True, 
   
     )
-    extended_title = f"Linear Regression Losses\n" \
+    extended_title = f"{DATASET_TYPE} Model Losses\n" \
         f"Dataset: {dataset.__class__.__name__}\n" \
         f"Optimizer: {', '.join(optimizers_dict.keys())}\n" \
-        f"Epochs: {10}, Batch size: {128}, N_samples: {dataset.N_samples}\n" \
+        f"Epochs: {10}, Batch size: {BATCH_SIZE}, N_samples: {dataset.N_samples}\n" \
         f"Noise type: {dataset.noise_type}, Noise level: {dataset.noise_level}\n" \
         f"Weight init: {dataset.weight_init}, Seed: {dataset.seed}\n"
     extended_title += f"Covariance type: {dataset.covariance_type}, Covariance strength: {dataset.covariance_strength}\n"
@@ -216,6 +271,7 @@ if __name__ == "__main__":
         figsize=(12, 6),
         ylim=None,
         style='default',
-        save_path=f"./plots/linear_regression/linear_regression_losses.png", 
+        save_path=f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses.png", 
         show=False
         )
+    

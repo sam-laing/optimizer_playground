@@ -32,3 +32,4 @@ class LinearRegressionModel(nn.Module):
         Get weights of the model
         """
         return self.W
+

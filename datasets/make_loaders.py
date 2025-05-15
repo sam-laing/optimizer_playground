@@ -6,11 +6,11 @@ def make_loaders(
     dataset: Dataset,
     batch_size: int = 128,
     seed: int = 0,
-    val_size: int = None,
+    val_size: float = None,
     shuffle: bool = True,
 ):
     """
-    Create data loaders for training and testing.
+    Create data loaders for training and testing with isolated random state.
     
     Args:
         dataset: Dataset object
@@ -25,16 +25,14 @@ def make_loaders(
     assert isinstance(dataset, Dataset), "dataset must be a torch.utils.data.Dataset"
     assert isinstance(batch_size, int), "batch_size must be an integer"
 
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
+    rng = np.random.RandomState(seed)
+    
     g = torch.Generator()
     g.manual_seed(seed)
 
     if val_size is not None:
-        # Randomly select a validation set
         indices = np.arange(len(dataset))
-        np.random.shuffle(indices)
+        rng.shuffle(indices)  
         val_size = int(len(dataset) * val_size)
         val_indices = indices[:val_size]
         train_indices = indices[val_size:]
@@ -42,19 +40,21 @@ def make_loaders(
         train_dataset = torch.utils.data.Subset(dataset, train_indices)
         val_dataset = torch.utils.data.Subset(dataset, val_indices)
         
+        g = torch.Generator().manual_seed(seed)
+        
         train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=shuffle, 
-            generator=g if shuffle else None
-            )
+            generator = g if shuffle else None
+        )
         val_loader = DataLoader(
-            val_dataset, batch_size=batch_size, shuffle=shuffle, 
-            generator=g if shuffle else None
-            )
+            val_dataset, batch_size=batch_size, shuffle=False
+        )
         
         return train_loader, val_loader
     else:   
-        # Use the entire dataset for training
+        #if no val_size, just make everything train
         train_loader = DataLoader(
             dataset, batch_size=batch_size, shuffle=shuffle, 
-            generator=g if shuffle else None)
+            generator=g if shuffle else None
+        )
         return train_loader
