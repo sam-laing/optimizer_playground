@@ -1,6 +1,6 @@
 from datasets import LinearRegressionDataset, LogisticRegressionDataset, make_loaders
 from models import LinearRegressionModel, LogisticRegressionModel
-from utils import plot_training_validation_losses
+from utils import plot_training_validation_losses, make_models_and_optimizers
 
 
 import torch
@@ -11,7 +11,7 @@ import torch.optim as optim
 from torch import Tensor
 from optimizers import SimpleMuon
 
-
+#kind of a useless inclusion but whatever
 def loss_function(W, X, Y):
     """
     Objective function for linear regression problem
@@ -55,88 +55,16 @@ def compare_optimizers(
         )
     else:
         raise ValueError("val_size must be in (0,1)... won't accept no val")
-    
-    """
-    models = {
-        name: LinearRegressionModel(
-            dim_input=dataset.dim_input,
-            dim_output=dataset.dim_output,
-            seed=model_seed
-        )
 
-        for name in optimizers_dict.keys()
-    }
-    #get the learning rate, wd and momentum/ beta1,beta2 from the optimizers_dict with some try except 
-
-    """
-    """
-    optimizers = {
-        name: optim_class(params=[models[name].W], **optim_kwargs)
-        for name, (optim_class, optim_kwargs) in optimizers_dict.items()
-    }
-    """
-
-    models = {}
-    optimizers = {}
-    for name, (optim_class, optim_kwargs) in optimizers_dict.items():
-        try:
-            lr = optim_kwargs['lr']
-        except KeyError:
-            lr = None
-        try:
-            wd = optim_kwargs['weight_decay']
-        except KeyError:
-            wd = None
-        try:
-            beta1 = optim_kwargs['betas'][0]
-            beta2 = optim_kwargs['betas'][1]
-        except KeyError:
-            beta1, beta2 = None, None
-            try:
-                # get momentum instead
-                momentum = optim_kwargs['momentum']
-            except KeyError:
-                momentum = None
-        cfg_name = name
-        if lr is not None:
-            cfg_name += f", lr:{lr}"
-        if wd is not None:
-            cfg_name += f", wd:{wd}"
-        if beta1 is not None and beta2 is not None:
-            cfg_name += f", beta1:{beta1}, beta2:{beta2}"
-        elif momentum is not None:
-            cfg_name += f", momentum:{momentum}"
-
-        if isinstance(dataset, LinearRegressionDataset):
-            model = LinearRegressionModel(
-                dim_input=dataset.dim_input,
-                dim_output=dataset.dim_output,
-                seed=model_seed
-            )
-        elif isinstance(dataset, LogisticRegressionDataset):    
-            model = LogisticRegressionModel(
-                dim_input=dataset.dim_input, 
-                num_classes=dataset.num_classes,
-                seed=model_seed
-            )
-        
-        elif isinstance(dataset, MnistDataset):
-            from models.simpleMLP import SimpleMLP
-            model = SimpleMLP(
-                dim_input=dataset.dim_input,
-                dim_output=dataset.dim_output,
-                seed=model_seed
-            )
-        else:
-            raise ValueError("Unknown dataset type")
-
-        models[cfg_name] = model.to(device)
-        optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
-
+    models, optimizers = make_models_and_optimizers(
+        dataset,
+        optimizers_dict,
+        model_seed=model_seed,
+        device=device
+    )
 
     losses = {name: [] for name in models.keys()}
     val_losses = {name: [] for name in models.keys()}
-
     for epoch in range(epochs):
         for i, (X, Y) in enumerate(train_loader):
             X, Y = X.to(device), Y.to(device)
@@ -198,38 +126,50 @@ if __name__ == "__main__":
         shuffle: bool = True
         device: str = "cpu"
 
-    DATASET_TYPE = "logistic"  # or "logistic"
+    DATASET_TYPE = "linear"  # or "logistic"
+    NOISE_TYPE = "laplace"  # or "uniform", "laplace"
+    WEIGHT_INIT = "gaussian"  # or "uniform", "laplace"
+    DATA_SEED = 33
+    DIM_INPUT = 200
+    DIM_OUTPUT = 10
+    NUM_CLASSES = 10
+    N_SAMPLES = 10_000
+    COV_STRENGTH = 0.6
+    NORMALIZE_FEATURES = True
 
 
     if DATASET_TYPE == "linear":
         dataset = LinearRegressionDataset(
             dim_input=200,
             dim_output=10,
-            N_samples=30_000,
-            noise_type="gaussian",
+            N_samples=N_SAMPLES,
+            noise_type=NOISE_TYPE,
             noise_level=0.01,
-            weight_init="gaussian",
-            seed=42
+            weight_init=WEIGHT_INIT,
+            seed=DATA_SEED,
+            covariance_type="full",
+            covariance_strength=COV_STRENGTH,
+            normalize_features=NORMALIZE_FEATURES
         )
     elif DATASET_TYPE == "logistic":
         dataset = LogisticRegressionDataset(
             dim_input=200,
-            num_classes=10,
-            #dim_output=90,
-            N_samples=30_000,
-            noise_type="uniform",
+            num_classes=NUM_CLASSES,
+            N_samples=N_SAMPLES,
+            noise_type=NOISE_TYPE,
             noise_level=0.9,
-            weight_init="gaussian",
-            seed=156, 
+            weight_init=WEIGHT_INIT,
+            seed=DATA_SEED, 
             covariance_type="full", 
-            covariance_strength=0.99
+            covariance_strength=COV_STRENGTH,
+            normalize_features=NORMALIZE_FEATURES
         )
     elif DATASET_TYPE == "mnist":
         from datasets import MnistDataset
         dataset = MnistDataset(root = "./data", train=True)
         
 
-        
+    """    
     optimizers_dict = {
         "SGD": (optim.SGD, {
             "lr": 0.05, "weight_decay": 0.1, "momentum": 0.9
@@ -241,14 +181,36 @@ if __name__ == "__main__":
             "lr": 0.1, "weight_decay": 0.1, "momentum": 0.8
             }),
     }
-    BATCH_SIZE = 128
-    
+    """    
+    from optimizers import CustomAdamW 
+
+    betas = (0.95, 0.95)
+    optimizers_dict = {
+        "BC and ZI": (CustomAdamW, {
+            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": True, "zero_init": True
+            }),
+        "no BC and ZI": (CustomAdamW, {
+            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": False,  "zero_init": True
+            }),
+        "no BC and no ZI": (CustomAdamW, {
+            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": False, "zero_init": False
+            }),
+        "BC and no ZI": (CustomAdamW, {
+            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": True, "zero_init": False
+            }),
+    }
+
+
+
+    BATCH_SIZE = 512
+    EPOCHS = 5 
+
     losses, val_losses = compare_optimizers(
         optimizers_dict,
         dataset,
         batch_size=BATCH_SIZE,
-        epochs=10,
-        model_seed=99,
+        epochs=EPOCHS,
+        model_seed=999,
         val_size=0.2,
         shuffle=True, 
   
@@ -256,22 +218,31 @@ if __name__ == "__main__":
     extended_title = f"{DATASET_TYPE} Model Losses\n" \
         f"Dataset: {dataset.__class__.__name__}\n" \
         f"Optimizer: {', '.join(optimizers_dict.keys())}\n" \
-        f"Epochs: {10}, Batch size: {BATCH_SIZE}, N_samples: {dataset.N_samples}\n" \
+        f"Epochs: {EPOCHS}, Batch size: {BATCH_SIZE}, N_samples: {dataset.N_samples}\n" \
         f"Noise type: {dataset.noise_type}, Noise level: {dataset.noise_level}\n" \
         f"Weight init: {dataset.weight_init}, Seed: {dataset.seed}\n"
     extended_title += f"Covariance type: {dataset.covariance_type}, Covariance strength: {dataset.covariance_strength}\n"
-
+    SAVE_PATH = f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses.png"
+    #check if this exact path exists, if so create a new file with a slightly altered name
+    #shamefully hacky solution but fine for now
+    import os
+    if os.path.exists(SAVE_PATH):
+        i = 1
+        while os.path.exists(SAVE_PATH):
+            SAVE_PATH = f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses_{i}.png"
+            i += 1
+        
     plot_training_validation_losses(
         title=extended_title,
         losses=losses,
         val_losses=val_losses,
-        batch_size=128,
+        batch_size=BATCH_SIZE,
         n_samples=dataset.N_samples,
         val_size=0.2,
         figsize=(12, 6),
         ylim=None,
         style='default',
-        save_path=f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses.png", 
+        save_path=SAVE_PATH, 
         show=False
         )
     

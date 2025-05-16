@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from datasets import LinearRegressionDataset, LogisticRegressionDataset, MnistDataset
+
 
 
 def plot_training_validation_losses(
@@ -73,3 +75,72 @@ def plot_training_validation_losses(
         print(f"Plot saved to {save_path}")
     if show: 
         plt.show()
+
+
+def make_models_and_optimizers(
+        dataset, 
+        optimizers_dict,
+        model_seed=0,
+        device='cpu',
+):
+    models = {}
+    optimizers = {}
+    for name, (optim_class, optim_kwargs) in optimizers_dict.items():
+        try:
+            lr = optim_kwargs['lr']
+        except KeyError:
+            lr = None
+        try:
+            wd = optim_kwargs['weight_decay']
+        except KeyError:
+            wd = None
+        try:
+            beta1 = optim_kwargs['betas'][0]
+            beta2 = optim_kwargs['betas'][1]
+        except KeyError:
+            beta1, beta2 = None, None
+            try:
+                # get momentum instead
+                momentum = optim_kwargs['momentum']
+            except KeyError:
+                momentum = None
+        cfg_name = name
+        if lr is not None:
+            cfg_name += f", lr:{lr}"
+        if wd is not None:
+            cfg_name += f", wd:{wd}"
+        if beta1 is not None and beta2 is not None:
+            cfg_name += f", beta1:{beta1}, beta2:{beta2}"
+        elif momentum is not None:
+            cfg_name += f", momentum:{momentum}"
+
+        if isinstance(dataset, LinearRegressionDataset):
+            from models import LinearRegressionModel
+            model = LinearRegressionModel(
+                dim_input=dataset.dim_input,
+                dim_output=dataset.dim_output,
+                seed=model_seed
+            )
+
+        elif isinstance(dataset, LogisticRegressionDataset):   
+            from models import LogisticRegressionModel 
+            model = LogisticRegressionModel(
+                dim_input=dataset.dim_input, 
+                num_classes=dataset.num_classes,
+                seed=model_seed
+            )
+        
+        elif isinstance(dataset, MnistDataset):
+            from models.simpleMLP import SimpleMLP
+            model = SimpleMLP(
+                dim_input=dataset.dim_input,
+                dim_output=dataset.dim_output,
+                seed=model_seed
+            )
+        else:
+            raise ValueError("Unknown dataset type")
+
+        models[cfg_name] = model.to(device)
+        optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
+
+    return models, optimizers

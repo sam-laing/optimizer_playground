@@ -25,7 +25,7 @@ class CustomAdamW(Optimizer):
         eps: float = 1e-8,
         betas: Betas2 = (0.9, 0.99),
         do_bias_correction: bool = False,
-        zero_init: bool = False,
+        zero_init: bool = True,
         weight_decay: float = 0.0,
     ):
         if lr <= 0.0:
