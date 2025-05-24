@@ -27,6 +27,8 @@ class CustomAdamW(Optimizer):
         do_bias_correction: bool = False,
         zero_init: bool = True,
         weight_decay: float = 0.0,
+        get_gradients: bool = False,
+        get_moments: bool = False,
     ):
         if lr <= 0.0:
             raise ValueError(f"Invalid learning rate: {lr}")
@@ -44,6 +46,8 @@ class CustomAdamW(Optimizer):
             eps=eps,
             do_bias_correction=do_bias_correction,
             zero_init=zero_init,
+            get_gradients=get_gradients,
+            get_moments=get_moments,
         )
         super().__init__(params, defaults)
 
@@ -53,6 +57,7 @@ class CustomAdamW(Optimizer):
         if closure is not None:
             loss = closure()
 
+        
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -100,4 +105,8 @@ class CustomAdamW(Optimizer):
                 p.data.addcdiv_(exp_avg_corrected, denom, value=-group["lr"])
 
         return loss
+    
+
+    
+
     

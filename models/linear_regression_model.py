@@ -12,15 +12,14 @@ class LinearRegressionModel(nn.Module):
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.seed = seed
-        self._set_seed(seed)
+
+        self.model_generator = torch.Generator()
+        self.model_generator.manual_seed(seed)
+        self.np_rng = np.random.RandomState(seed)
+
         self.W = Parameter(torch.randn(dim_input + 1, dim_output))
         self.W.data = torch.nn.init.xavier_uniform_(self.W.data)
 
-    def _set_seed(self, seed):
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        np.random.seed(seed)
-    
     def forward(self, X: Tensor) -> Tensor:
         """
         Forward pass for linear regression model

@@ -8,7 +8,7 @@ from torch import Tensor
 from typing import Tuple, Dict, Any, Optional
 
 
-class LinearRegressionDataset(Dataset):
+class LinearRegressionSingDataset(Dataset):
     """"
     Mock up artificial data which is ideal for a linear regression problem
     Y = XW + noise
@@ -41,7 +41,7 @@ class LinearRegressionDataset(Dataset):
         covariance_type: Optional[str] = None, covariance_strength: Optional[float] = None, 
         normalize_features: bool = False,
     ):
-        super(LinearRegressionDataset, self).__init__()
+        super(LinearRegressionSingDataset, self).__init__()
         if covariance_strength is None:
             assert covariance_type is None, "covariance_strength must be specified if covariance_type is specified"
 
@@ -107,6 +107,8 @@ class LinearRegressionDataset(Dataset):
         U, S, Vh = torch.svd(A)
 
         #get desired condition number
+    def _generate_weight_matrix(self):
+        W = torch.randn(self.dim)
 
 
 

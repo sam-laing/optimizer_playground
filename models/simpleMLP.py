@@ -37,20 +37,40 @@ class SimpleMLP(nn.Module):
         self.layer_norm = layer_norm
         self.rms_norm = rms_norm
         self.model_seed = model_seed
-        
-        
+
+        self.model_generator = torch.Generator()
+        self.model_generator.manual_seed(model_seed)
+        self.np_rng = np.random.RandomState(model_seed)
+
         self.model = self._build_model()
-        self._initialise_weights()
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight, generator=self.model_generator)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.BatchNorm1d):
+                if m.weight is not None:
+                    nn.init.ones_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.LayerNorm):
+                if m.weight is not None:
+                    nn.init.ones_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.RMSNorm):
+                if m.weight is not None:
+                    nn.init.ones_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+       
 
 
-    def _initialise_weights(self) -> None:
-        """
-        Initialize weights of the model
-        """
-        torch.manual_seed(self.model_seed)
-        torch.cuda.manual_seed(self.model_seed)
-        np.random.seed(self.model_seed)
-
+            
+            
 
     def _build_model(self) -> Sequential:
         layers = []
