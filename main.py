@@ -1,4 +1,4 @@
-from datasets import LinearRegressionDataset, LogisticRegressionDataset, make_loaders
+from datasets import LinearRegressionDataset, LogisticRegressionDataset,LinearRegressionSingDataset, make_loaders
 from models import LinearRegressionModel, LogisticRegressionModel
 from utils import plot_training_validation_losses, make_models_and_optimizers
 
@@ -15,11 +15,14 @@ from optimizers import SimpleMuon
 def loss_function(W, X, Y):
     """
     Objective function for linear regression problem
-    L(W) = ||Y - XW||^2 + lambda * ||W||^2
+    L(W) = ||Y - XW||^2 
     """
     loss = F.mse_loss(X @ W, Y)
     return loss
 
+def cross_entropy(W, X, Y):
+    loss = nn.CrossEntropyLoss(X @ W, Y)
+    return loss 
 
 def compare_optimizers(
         optimizers_dict: dict,  # Format: {'optim_name': (optim_class, optim_kwargs)}
@@ -126,34 +129,66 @@ if __name__ == "__main__":
         shuffle: bool = True
         device: str = "cpu"
 
-    DATASET_TYPE = "linear"  # or "logistic"
-    NOISE_TYPE = "laplace"  # or "uniform", "laplace"
+
+    DATASET_TYPE = "linear_singular" 
+    NOISE_TYPE = "gaussian"  # or "uniform", "laplace"
     WEIGHT_INIT = "gaussian"  # or "uniform", "laplace"
-    DATA_SEED = 33
+    DATA_SEED = 4
     DIM_INPUT = 200
     DIM_OUTPUT = 10
     NUM_CLASSES = 10
-    N_SAMPLES = 10_000
+    N_SAMPLES = 2_000
+    MODEL_SEED = 99
+    SNR = 0.0001
+    CONDITION_NUMBER = 1e9 
+    SING_DIST = "normal"  
     COV_STRENGTH = 0.6
     NORMALIZE_FEATURES = True
+    BATCH_SIZE = N_SAMPLES
+    EPOCHS = 75 
 
 
+
+    """   
     if DATASET_TYPE == "linear":
         dataset = LinearRegressionDataset(
-            dim_input=200,
-            dim_output=10,
+            dim_input=DIM_INPUT,
+            dim_output=DIM_OUTPUT,
             N_samples=N_SAMPLES,
             noise_type=NOISE_TYPE,
-            noise_level=0.01,
+            noise_level=NOISE_LEVEL,
             weight_init=WEIGHT_INIT,
             seed=DATA_SEED,
             covariance_type="full",
             covariance_strength=COV_STRENGTH,
             normalize_features=NORMALIZE_FEATURES
         )
+    """  
+
+
+    if DATASET_TYPE == "linear_singular":
+        """   
+                self, dim_input: int, dim_output: int, N_samples: int, 
+        noise_type: str = "gaussian", 
+        weight_init: str = "gaussian", seed: int = 0, 
+        snr: float = 100, sing_dist: str = "uniform", condition_number: float = 1e6
+        """
+
+
+        dataset = LinearRegressionSingDataset(
+            dim_input=DIM_INPUT,
+            dim_output=DIM_OUTPUT,
+            N_samples=N_SAMPLES,
+            weight_init=WEIGHT_INIT,
+            noise_type=NOISE_TYPE,
+            seed=DATA_SEED,
+            snr=SNR, 
+            sing_dist=SING_DIST,
+            condition_number=CONDITION_NUMBER,
+        )
     elif DATASET_TYPE == "logistic":
         dataset = LogisticRegressionDataset(
-            dim_input=200,
+            dim_input=DIM_INPUT,
             num_classes=NUM_CLASSES,
             N_samples=N_SAMPLES,
             noise_type=NOISE_TYPE,
@@ -168,17 +203,16 @@ if __name__ == "__main__":
         from datasets import MnistDataset
         dataset = MnistDataset(root = "./data", train=True)
         
-
-    """    
+    from optimizers import Muon
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.05, "weight_decay": 0.1, "momentum": 0.9
+            "lr": 0.01, "weight_decay": 0.01, "momentum": 0.9
             }),
         "AdamW": (optim.AdamW, {
-            "lr": 0.01, "weight_decay": 0.1, "betas": (0.9, 0.999)
+            "lr": 0.05, "weight_decay": 0.1, "betas": (0.95, 0.95)
             }),
-        "SimpleMuon": (SimpleMuon, {
-            "lr": 0.1, "weight_decay": 0.1, "momentum": 0.8
+        "Muon": (Muon, {
+            "lr": 0.07, "weight_decay": 0.1, "momentum": 0.9
             }),
     }
     """    
@@ -200,17 +234,16 @@ if __name__ == "__main__":
             }),
     }
 
+    """    
 
 
-    BATCH_SIZE = 512
-    EPOCHS = 5 
 
     losses, val_losses = compare_optimizers(
         optimizers_dict,
         dataset,
         batch_size=BATCH_SIZE,
         epochs=EPOCHS,
-        model_seed=999,
+        model_seed=MODEL_SEED,
         val_size=0.2,
         shuffle=True, 
   
@@ -219,9 +252,9 @@ if __name__ == "__main__":
         f"Dataset: {dataset.__class__.__name__}\n" \
         f"Optimizer: {', '.join(optimizers_dict.keys())}\n" \
         f"Epochs: {EPOCHS}, Batch size: {BATCH_SIZE}, N_samples: {dataset.N_samples}\n" \
-        f"Noise type: {dataset.noise_type}, Noise level: {dataset.noise_level}\n" \
+        f"Noise type: {dataset.noise_type}, SNR: {dataset.snr}\n" \
         f"Weight init: {dataset.weight_init}, Seed: {dataset.seed}\n"
-    extended_title += f"Covariance type: {dataset.covariance_type}, Covariance strength: {dataset.covariance_strength}\n"
+    extended_title += f"Condition number: {dataset.condition_number}, Singular value distribution: {dataset.sing_dist}\n"
     SAVE_PATH = f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses.png"
     #check if this exact path exists, if so create a new file with a slightly altered name
     #shamefully hacky solution but fine for now

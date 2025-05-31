@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from datasets import LinearRegressionDataset, LogisticRegressionDataset, MnistDataset
-
+from datasets import LinearRegressionDataset, LinearRegressionSingDataset, LogisticRegressionDataset, MnistDataset
+from optimizers import Muon 
 
 
 def plot_training_validation_losses(
@@ -114,13 +114,15 @@ def make_models_and_optimizers(
         elif momentum is not None:
             cfg_name += f", momentum:{momentum}"
 
-        if isinstance(dataset, LinearRegressionDataset):
+        if isinstance(dataset, LinearRegressionDataset) or isinstance(dataset, LinearRegressionSingDataset):
             from models import LinearRegressionModel
             model = LinearRegressionModel(
                 dim_input=dataset.dim_input,
                 dim_output=dataset.dim_output,
-                seed=model_seed
+                model_seed=model_seed, 
+                separate_bias=False
             )
+        
 
         elif isinstance(dataset, LogisticRegressionDataset):   
             from models import LogisticRegressionModel 
@@ -141,7 +143,12 @@ def make_models_and_optimizers(
             raise ValueError("Unknown dataset type")
 
         models[cfg_name] = model.to(device)
-        optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
+        if optim_class is Muon:
+            print(f"muon being used {optim_class} ")
+            optimizers[cfg_name] = optim_class(muon_params=[model.W], **optim_kwargs)
+        else:
+            print(f"standard optimizer being used {optim_class} ")
+            optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
 
     return models, optimizers
 
