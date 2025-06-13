@@ -115,6 +115,36 @@ if __name__ == "__main__":
     
 
     dataset = MnistDataset(root="./data")
+    print("making loaders")
     train_loader, val_loader = make_loaders(
         dataset, batch_size=128, seed=0, val_size=0.2, shuffle=True
     )
+
+    print("train_loader created")
+    for X, Y in train_loader:
+        print(f"X shape: {X.shape}, Y shape: {Y.shape}")
+        print(type(X), type(Y))
+        break
+    """ 
+    model = SimpleMLP(
+        dim_input=28*28, 
+        dim_output=10, 
+        hidden_layers=[128, 64], 
+        activation="relu", 
+        dropout=0.2, 
+        batch_norm=True, 
+        layer_norm=False, 
+        rms_norm=False,
+        model_seed=42
+    )
+    model.train()
+
+    for X, Y in train_loader:
+        print(type(X))
+        X = X.view(X.size(0), -1)
+        out = model(X)
+        loss = F.cross_entropy(out, Y)
+        print(f"Loss: {loss.item()}")
+        loss.backward()
+        break
+        """

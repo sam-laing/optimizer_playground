@@ -10,6 +10,12 @@ from models import LinearRegressionModel, LogisticRegressionModel
 from main import compare_optimizers
 from optimizers import SimpleMuon  
 
+from optuna import Trial, create_study
+
+
+
+
+
 def optimize_hyperparams(
     optimizer_class: Type,
     param_space: Dict[str, Dict[str, Any]],

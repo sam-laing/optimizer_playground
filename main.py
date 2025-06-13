@@ -1,80 +1,76 @@
-from datasets import LinearRegressionDataset, LogisticRegressionDataset,LinearRegressionSingDataset, make_loaders
-from models import LinearRegressionModel, LogisticRegressionModel
-from utils import plot_training_validation_losses, make_models_and_optimizers
-
-
+from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-
 import torch.optim as optim
-from torch import Tensor
-from optimizers import SimpleMuon
 
-#kind of a useless inclusion but whatever
+from datasets import (
+    LinearRegressionDataset,
+    LogisticRegressionDataset,
+    LinearRegressionSingDataset,
+    make_loaders,
+)
+from models import LinearRegressionModel, LogisticRegressionModel
+from utils import plot_training_validation_losses, make_models_and_optimizers
+from optimizers import Muon
+
+@dataclass
+class Config:
+    dataset_type: str = "linear_singular"
+    noise_type: str = "gaussian"
+    weight_init: str = "gaussian"
+    data_seed: int = 33
+    dim_input: int = 200
+    dim_output: int = 40
+    num_classes: int = 10
+    n_samples: int = 10_000
+    model_seed: int = 99
+    snr: float = 100
+    condition_number: float = 100
+    sing_dist: str = "normal"
+    cov_strength: float = 0.6
+    normalize_features: bool = True
+    batch_size: int = 1000
+    epochs: int = 5
+    max_singular_value: float = 5
+    noise_level: float = 0.01  # only used for linear regression datasets
+    val_size: float = 0.2
+    shuffle: bool = True
+    device: str = "cpu"
+    separate_bias: bool = True
+
 def loss_function(W, X, Y):
-    """
-    Objective function for linear regression problem
-    L(W) = ||Y - XW||^2 
-    """
-    loss = F.mse_loss(X @ W, Y)
-    return loss
-
-def cross_entropy(W, X, Y):
-    loss = nn.CrossEntropyLoss(X @ W, Y)
-    return loss 
+    return F.mse_loss(X @ W, Y)
 
 def compare_optimizers(
-        optimizers_dict: dict,  # Format: {'optim_name': (optim_class, optim_kwargs)}
-        dataset: LinearRegressionDataset,
-        device: str = "cpu",
-        batch_size: int = 128,
-        epochs: int = 10,
-        model_seed: int = 99,
-        sampler_seed: int = 99,
-        val_size: int = 0.2,
-        shuffle: bool = True,
-
-    ):
-    """
-    Compare multiple optimizers by training linear regression models on dataset.
-
-    Args:
-        optimizers_dict: Dictionary where keys are optimizer names and values are tuples of
-                        (optimizer_class, optimizer_kwargs)
-        dataset: Dataset object
-        batch_size: Batch size for data loading
-        epochs: Number of training epochs
-        model_seed: Random seed for model initialization
-        val_size: Size of validation set (if None, use the entire dataset for training)
-        shuffle: Whether to shuffle the data
-    Returns:   
-        Dictionary containing loss histories for each optimizer
-    """
-    #dataloading 
-    if val_size is not None:
-        train_loader, val_loader = make_loaders(
-            dataset, batch_size=batch_size, seed=sampler_seed, val_size=val_size, shuffle=shuffle
-        )
-    else:
-        raise ValueError("val_size must be in (0,1)... won't accept no val")
+    optimizers_dict: dict,
+    dataset,
+    config: Config,
+):
+    train_loader, val_loader = make_loaders(
+        dataset,
+        batch_size=config.batch_size,
+        seed=config.data_seed,
+        val_size=config.val_size,
+        shuffle=config.shuffle,
+    )
 
     models, optimizers = make_models_and_optimizers(
         dataset,
         optimizers_dict,
-        model_seed=model_seed,
-        device=device
+        model_seed=config.model_seed,
+        device=config.device,
     )
 
     losses = {name: [] for name in models.keys()}
     val_losses = {name: [] for name in models.keys()}
-    for epoch in range(epochs):
+    for epoch in range(config.epochs):
         for i, (X, Y) in enumerate(train_loader):
-            X, Y = X.to(device), Y.to(device)
+            X, Y = X.to(config.device), Y.to(config.device)
             current_losses = {}
             for name, model in models.items():
                 out = model(X)
-                loss = loss_function(model.get_weights(), X, Y)
+                loss = F.mse_loss(out, Y)
                 current_losses[name] = loss.item()
                 losses[name].append(loss.item())
 
@@ -83,199 +79,120 @@ def compare_optimizers(
                 optimizers[name].step()
 
             loss_str = ", ".join([f"{name}: {loss:.4f}" for name, loss in current_losses.items()])
-            print(f"Epoch {epoch+1}/{epochs}, Step {i}, Losses: {loss_str}")
-        
-        #val once per epoch
+            print(f"Epoch {epoch+1}/{config.epochs}, Step {i}, Losses: {loss_str}")
+
+        # Validation
         for name, model in models.items():
             val_loss = 0
             with torch.no_grad():
                 for X_val, Y_val in val_loader:
-                    X_val, Y_val = X_val.to(device), Y_val.to(device)
+                    X_val, Y_val = X_val.to(config.device), Y_val.to(config.device)
                     out = model(X_val)
-                    val_loss += loss_function(model.get_weights(), X_val, Y_val).item()
-            
+                    val_loss += F.mse_loss(out, Y_val).item()
             val_loss /= len(val_loader)
             val_losses[name].append(val_loss)
-        #join val losses[name][-1] into one string for all name to display the val loss of each optimizer
         val_loss_str = ", ".join([f"{name}: {val_losses[name][-1]:.4f}" for name in val_losses.keys()])
-
-        print(f"Epoch {epoch+1}/{epochs}, Validation Losses: {val_loss_str}")
-
-    
-    
+        print(f"Epoch {epoch+1}/{config.epochs}, Validation Losses: {val_loss_str}")
 
     return losses, val_losses
 
-
 if __name__ == "__main__":
-    from dataclasses import dataclass
+    config = Config()
 
-
-    @dataclass
-    class Config:
-        dim_input: int
-        dim_output: int
-        N_samples: int
-        noise_type: str
-        noise_level: float
-        weight_init: str
-        seed: int
-        covariance_type: str = None
-        covariance_strength: float = 0.5
-        batch_size: int = 128
-        epochs: int = 10
-        model_seed: int = 99
-        val_size: float = 0.2
-        shuffle: bool = True
-        device: str = "cpu"
-
-
-    DATASET_TYPE = "linear_singular" 
-    NOISE_TYPE = "gaussian"  # or "uniform", "laplace"
-    WEIGHT_INIT = "gaussian"  # or "uniform", "laplace"
-    DATA_SEED = 4
-    DIM_INPUT = 200
-    DIM_OUTPUT = 10
-    NUM_CLASSES = 10
-    N_SAMPLES = 2_000
-    MODEL_SEED = 99
-    SNR = 0.0001
-    CONDITION_NUMBER = 1e9 
-    SING_DIST = "normal"  
-    COV_STRENGTH = 0.6
-    NORMALIZE_FEATURES = True
-    BATCH_SIZE = N_SAMPLES
-    EPOCHS = 75 
-
-
-
-    """   
-    if DATASET_TYPE == "linear":
+    # Dataset selection
+    if config.dataset_type == "linear":
         dataset = LinearRegressionDataset(
-            dim_input=DIM_INPUT,
-            dim_output=DIM_OUTPUT,
-            N_samples=N_SAMPLES,
-            noise_type=NOISE_TYPE,
-            noise_level=NOISE_LEVEL,
-            weight_init=WEIGHT_INIT,
-            seed=DATA_SEED,
+            dim_input=config.dim_input,
+            dim_output=config.dim_output,
+            N_samples=config.n_samples,
+            noise_type=config.noise_type,
+            noise_level=config.noise_level,
+            weight_init=config.weight_init,
+            seed=config.data_seed,
             covariance_type="full",
-            covariance_strength=COV_STRENGTH,
-            normalize_features=NORMALIZE_FEATURES
+            covariance_strength=config.cov_strength,
+            normalize_features=config.normalize_features,
         )
-    """  
-
-
-    if DATASET_TYPE == "linear_singular":
-        """   
-                self, dim_input: int, dim_output: int, N_samples: int, 
-        noise_type: str = "gaussian", 
-        weight_init: str = "gaussian", seed: int = 0, 
-        snr: float = 100, sing_dist: str = "uniform", condition_number: float = 1e6
-        """
-
-
+    elif config.dataset_type == "linear_singular":
         dataset = LinearRegressionSingDataset(
-            dim_input=DIM_INPUT,
-            dim_output=DIM_OUTPUT,
-            N_samples=N_SAMPLES,
-            weight_init=WEIGHT_INIT,
-            noise_type=NOISE_TYPE,
-            seed=DATA_SEED,
-            snr=SNR, 
-            sing_dist=SING_DIST,
-            condition_number=CONDITION_NUMBER,
+            dim_input=config.dim_input,
+            dim_output=config.dim_output,
+            N_samples=config.n_samples,
+            weight_init=config.weight_init,
+            noise_type=config.noise_type,
+            seed=config.data_seed,
+            snr=config.snr,
+            sing_dist=config.sing_dist,
+            condition_number=config.condition_number,
+            normalize_features=config.normalize_features,
+            max_singular_value=config.max_singular_value,
         )
-    elif DATASET_TYPE == "logistic":
+    elif config.dataset_type == "logistic":
         dataset = LogisticRegressionDataset(
-            dim_input=DIM_INPUT,
-            num_classes=NUM_CLASSES,
-            N_samples=N_SAMPLES,
-            noise_type=NOISE_TYPE,
+            dim_input=config.dim_input,
+            num_classes=config.num_classes,
+            N_samples=config.n_samples,
+            noise_type=config.noise_type,
             noise_level=0.9,
-            weight_init=WEIGHT_INIT,
-            seed=DATA_SEED, 
-            covariance_type="full", 
-            covariance_strength=COV_STRENGTH,
-            normalize_features=NORMALIZE_FEATURES
+            weight_init=config.weight_init,
+            seed=config.data_seed,
+            covariance_type="full",
+            covariance_strength=config.cov_strength,
+            normalize_features=config.normalize_features,
         )
-    elif DATASET_TYPE == "mnist":
+    elif config.dataset_type == "mnist":
         from datasets import MnistDataset
-        dataset = MnistDataset(root = "./data", train=True)
-        
-    from optimizers import Muon
+        dataset = MnistDataset(root="./data", train=True)
+    else:
+        raise ValueError(f"Unknown dataset_type: {config.dataset_type}")
+
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.01, "weight_decay": 0.01, "momentum": 0.9
-            }),
+            "lr": 0.5, "weight_decay": 0.1, "momentum": 0.95
+        }),
         "AdamW": (optim.AdamW, {
             "lr": 0.05, "weight_decay": 0.1, "betas": (0.95, 0.95)
-            }),
+        }),
         "Muon": (Muon, {
-            "lr": 0.07, "weight_decay": 0.1, "momentum": 0.9
-            }),
+            "lr": 0.0075, "weight_decay": 0.05, "momentum": 0.9
+        }),
     }
-    """    
-    from optimizers import CustomAdamW 
-
-    betas = (0.95, 0.95)
-    optimizers_dict = {
-        "BC and ZI": (CustomAdamW, {
-            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": True, "zero_init": True
-            }),
-        "no BC and ZI": (CustomAdamW, {
-            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": False,  "zero_init": True
-            }),
-        "no BC and no ZI": (CustomAdamW, {
-            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": False, "zero_init": False
-            }),
-        "BC and no ZI": (CustomAdamW, {
-            "lr": 0.01, "weight_decay": 0.1, "betas": (betas), "do_bias_correction": True, "zero_init": False
-            }),
-    }
-
-    """    
-
-
 
     losses, val_losses = compare_optimizers(
         optimizers_dict,
         dataset,
-        batch_size=BATCH_SIZE,
-        epochs=EPOCHS,
-        model_seed=MODEL_SEED,
-        val_size=0.2,
-        shuffle=True, 
-  
+        config,
     )
-    extended_title = f"{DATASET_TYPE} Model Losses\n" \
-        f"Dataset: {dataset.__class__.__name__}\n" \
-        f"Optimizer: {', '.join(optimizers_dict.keys())}\n" \
-        f"Epochs: {EPOCHS}, Batch size: {BATCH_SIZE}, N_samples: {dataset.N_samples}\n" \
-        f"Noise type: {dataset.noise_type}, SNR: {dataset.snr}\n" \
-        f"Weight init: {dataset.weight_init}, Seed: {dataset.seed}\n"
-    extended_title += f"Condition number: {dataset.condition_number}, Singular value distribution: {dataset.sing_dist}\n"
-    SAVE_PATH = f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses.png"
-    #check if this exact path exists, if so create a new file with a slightly altered name
-    #shamefully hacky solution but fine for now
+
+    extended_title = (
+        f"{config.dataset_type} Model Losses\n"
+        f"Dataset: {dataset.__class__.__name__}\n"
+        f"Optimizer: {', '.join(optimizers_dict.keys())}\n"
+        f"Epochs: {config.epochs}, Batch size: {config.batch_size}, N_samples: {config.n_samples}\n"
+        f"Noise type: {getattr(dataset, 'noise_type', 'N/A')}, SNR: {getattr(dataset, 'snr', 'N/A')}\n"
+        f"Weight init: {getattr(dataset, 'weight_init', 'N/A')}, Seed: {getattr(dataset, 'seed', 'N/A')}\n"
+    )
+    if hasattr(dataset, "condition_number"):
+        extended_title += f"Condition number: {dataset.condition_number}, Singular dist: {getattr(dataset, 'sing_dist', 'N/A')}\n"
+
+    SAVE_PATH = f"./plots/{config.dataset_type}/{config.dataset_type}_losses.png"
     import os
     if os.path.exists(SAVE_PATH):
         i = 1
         while os.path.exists(SAVE_PATH):
-            SAVE_PATH = f"./plots/{DATASET_TYPE}/{DATASET_TYPE}_losses_{i}.png"
+            SAVE_PATH = f"./plots/{config.dataset_type}/{config.dataset_type}_losses_{i}.png"
             i += 1
-        
+
     plot_training_validation_losses(
         title=extended_title,
         losses=losses,
         val_losses=val_losses,
-        batch_size=BATCH_SIZE,
-        n_samples=dataset.N_samples,
-        val_size=0.2,
+        batch_size=config.batch_size,
+        n_samples=config.n_samples,
+        val_size=config.val_size,
         figsize=(12, 6),
         ylim=None,
         style='default',
-        save_path=SAVE_PATH, 
+        save_path=SAVE_PATH,
         show=False
-        )
-    
+    )

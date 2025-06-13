@@ -23,6 +23,39 @@ want to iterate through a zip of the optimizers HPs so each hp should have the s
 
 if __name__ == "__main__":
     # Example usage
+    from datasets import LinearRegressionSingDataset
+
+    DATASET_TYPE = "linear_singular" 
+    NOISE_TYPE = "gaussian"  # or "uniform", "laplace"
+    WEIGHT_INIT = "gaussian"  # or "uniform", "laplace"
+    DATA_SEED = 4
+    DIM_INPUT = 200
+    DIM_OUTPUT = 30
+    NUM_CLASSES = 10
+    N_SAMPLES = 3_000
+    MODEL_SEED = 99
+    SNR = 1
+    CONDITION_NUMBER = 1000
+    SING_DIST = "uniform"  
+    COV_STRENGTH = 0.6
+    NORMALIZE_FEATURES = True
+    BATCH_SIZE = N_SAMPLES
+    EPOCHS = 22 
+
+    dataset = LinearRegressionSingDataset(
+        dim_input=DIM_INPUT,
+        dim_output=DIM_OUTPUT,
+        N_samples=N_SAMPLES,
+        weight_init=WEIGHT_INIT,
+        noise_type=NOISE_TYPE,
+        seed=DATA_SEED,
+        snr=SNR, 
+        sing_dist=SING_DIST,
+        condition_number=CONDITION_NUMBER,
+    )
+
+
+    """    
     dataset = LinearRegressionDataset(
         dim_input=200,
         dim_output=10,
@@ -33,6 +66,7 @@ if __name__ == "__main__":
         seed=42
     )
     
+    """    
     #to sweep HPs
 
     lrs = [0.001, 0.01, 0.1]  #[0.001, 0.005, 0.01, 0.1]
@@ -77,11 +111,13 @@ if __name__ == "__main__":
         model_seed=999,
         sampler_seed=999,
         val_size=0.2,
-        shuffle=True
+        shuffle=True, 
+        separate_bias=False,
     )
     best_val_dict = {}
     for (name, losses) in SGD_val_losses.items():
         best_val_dict[name] = min(losses)
+        print(f"Final val loss for {name}: {min(losses)}")
         print(f"Best val loss for {name}: {min(losses)}")
     best_val = min(best_val_dict.values())
 

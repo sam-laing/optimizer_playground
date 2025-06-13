@@ -5,13 +5,13 @@ import numpy as np
 from torch.nn import Parameter
 from torch import Tensor
 
-class LinearRegressionModel(nn.Module):
+class LinearRegressionSingModel(nn.Module):
     def __init__(
             self, dim_input: int, dim_output: int, 
             model_seed: int=99, 
             separate_bias: bool = True,
         ):
-        super(LinearRegressionModel, self).__init__()
+        super(LinearRegressionSingModel, self).__init__()
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.model_seed = model_seed
@@ -46,4 +46,3 @@ class LinearRegressionModel(nn.Module):
         Get weights of the model
         """
         return self.W
-

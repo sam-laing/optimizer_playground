@@ -40,7 +40,8 @@ class LinearRegressionSingDataset(Dataset):
         self, dim_input: int, dim_output: int, N_samples: int, 
         noise_type: str = "gaussian", 
         weight_init: str = "gaussian", seed: int = 0, 
-        snr: float = 100, sing_dist: str = "uniform", condition_number: float = 1e6
+        snr: float = 100, sing_dist: str = "uniform", condition_number: float = 1e6, max_singular_value: float = 1.0, 
+        normalize_features: bool = False,
 
     ):
         super(LinearRegressionSingDataset, self).__init__()
@@ -54,9 +55,11 @@ class LinearRegressionSingDataset(Dataset):
         self.weight_init = weight_init
 
         self.snr = snr
-        self.condition_number = 1e6  # Default condition number
-        self.sing_dist = sing_dist
         self.condition_number = condition_number
+        self.sing_dist = sing_dist
+        self.max_singular_value = max_singular_value
+        self.condition_number = condition_number
+        self.normalize_features = normalize_features
         
         #randomness should be controlled by a generator to not effect global random state
         self.seed = seed
@@ -71,6 +74,10 @@ class LinearRegressionSingDataset(Dataset):
         self._generate_true_weights()
         self.Y = self.X @ self.W_true
         self._generate_noise()
+        self.Y += self.noise
+
+        if self.normalize_features:
+            self.X = (self.X - self.X.mean(dim=0)) / (self.X.std(dim=0) + 1e-8)
 
         self.data = lambda: {
             "X": self.X,
@@ -98,7 +105,7 @@ class LinearRegressionSingDataset(Dataset):
         self.Vh, _ = torch.linalg.qr(Vh) 
 
         #svd with max singular value of 1.0 and guarantee certain condition number regardless of sing_dist
-        max_singular_value = 1.0
+        max_singular_value = self.max_singular_value if hasattr(self, 'max_singular_value') else 1.0
         min_singular_value = max_singular_value / self.condition_number
 
 
