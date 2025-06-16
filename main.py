@@ -19,20 +19,20 @@ class Config:
     dataset_type: str = "linear_singular"
     noise_type: str = "gaussian"
     weight_init: str = "gaussian"
-    data_seed: int = 33
+    data_seed: int = 22
     dim_input: int = 200
     dim_output: int = 40
     num_classes: int = 10
     n_samples: int = 10_000
-    model_seed: int = 99
+    model_seed: int = 9
     snr: float = 100
     condition_number: float = 100
     sing_dist: str = "normal"
     cov_strength: float = 0.6
     normalize_features: bool = True
-    batch_size: int = 1000
-    epochs: int = 5
-    max_singular_value: float = 5
+    batch_size: int = 10_000
+    epochs: int = 15
+    max_singular_value: float = 1
     noise_level: float = 0.01  # only used for linear regression datasets
     val_size: float = 0.2
     shuffle: bool = True
@@ -97,7 +97,14 @@ def compare_optimizers(
     return losses, val_losses
 
 if __name__ == "__main__":
-    config = Config()
+    config = Config(
+        dim_input=344, dim_output=35,
+        snr=50, condition_number=3, 
+        data_seed=23, model_seed=42,
+        dataset_type="linear_singular",  # Change to "linear", "logistic", or "mnist" as needed
+        noise_type="gaussian", 
+        epochs=25
+        )
 
     # Dataset selection
     if config.dataset_type == "linear":
@@ -148,13 +155,13 @@ if __name__ == "__main__":
 
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.5, "weight_decay": 0.1, "momentum": 0.95
+            "lr": 0.5, "weight_decay": 0, "momentum": 0.95
         }),
         "AdamW": (optim.AdamW, {
-            "lr": 0.05, "weight_decay": 0.1, "betas": (0.95, 0.95)
+            "lr": 0.1, "weight_decay": 0, "betas": (0.95, 0.95)
         }),
         "Muon": (Muon, {
-            "lr": 0.075, "weight_decay": 0.05, "momentum": 0.9
+            "lr": 0.1, "weight_decay": 0, "momentum": 0.95
         }),
     }
 
@@ -186,7 +193,7 @@ if __name__ == "__main__":
     plot_training_validation_losses(
         title=extended_title,
         losses=losses,
-        val_losses=val_losses,
+        val_losses=None,
         batch_size=config.batch_size,
         n_samples=config.n_samples,
         val_size=config.val_size,

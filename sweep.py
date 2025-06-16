@@ -25,16 +25,14 @@ class Config:
     batch_size: int = 1000
     epochs: int = 5
     max_singular_value: float = 5
-    noise_level: float = 0.01  # only used for linear regression datasets
     val_size: float = 0.2
     shuffle: bool = True
     device: str = "cpu"
-    separate_bias: bool = True
+    separate_bias: bool = False
 
-# Define sweep ranges
 lrs = [0.01, 0.05, 0.1]
-wds = [0.0, 0.01, 0.1]
-moms = [0.8, 0.9, 0.95]
+wds = [0.01]
+moms = [0.95]
 condition_numbers = [10, 100, 1000]
 snrs = [10, 100, 1000]
 
@@ -60,7 +58,6 @@ for cond, snr in itertools.product(condition_numbers, snrs):
             }),
         }
 
-        # Dataset selection (example for linear_singular)
         dataset = LinearRegressionSingDataset(
             dim_input=config.dim_input,
             dim_output=config.dim_output,
@@ -94,7 +91,23 @@ for cond, snr in itertools.product(condition_numbers, snrs):
 
         print(f"Finished: lr={lr}, wd={wd}, mom={mom}, cond={cond}, snr={snr}")
 
-# Optionally, save results to disk for later analysis
-import pickle
-with open("sweep_results.pkl", "wb") as f:
-    pickle.dump(results, f)
+import dataclasses
+import json
+def make_jsonable(obj):
+    if dataclasses.is_dataclass(obj):
+        return dataclasses.asdict(obj)
+    elif isinstance(obj, dict):
+        return {k: make_jsonable(v) for k, v in obj.items()}
+    elif hasattr(obj, "tolist"):
+        return obj.tolist()
+    elif isinstance(obj, (list, tuple)):
+        return [make_jsonable(v) for v in obj]
+    else:
+        return obj
+
+jsonable_results = [make_jsonable(r) for r in results]
+
+with open("./data/sweep_results.json", "w") as f:
+    json.dump(jsonable_results, f, indent=4)
+
+

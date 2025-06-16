@@ -171,8 +171,42 @@ class LinearRegressionSingDataset(Dataset):
             raise ValueError("weight_init must be one of gaussian, uniform, laplace")
         
     def _generate_noise(self) -> None:
+        # Compute signal variance (power)
+        signal_var = torch.var(self.Y, dim=0)
+        signal_var = torch.clamp(signal_var, min=1e-5)  # Avoid division by zero
+        
+        # Correct noise calculation (variance-based)
+        noise_var = signal_var / self.snr
+        noise_std = torch.sqrt(noise_var)
+        
+        # Generate noise based on type
+        if self.noise_type == "gaussian":
+            self.noise = torch.randn(self.Y.shape, generator=self.torch_gen) * noise_std
+        elif self.noise_type == "uniform":
+            a = math.sqrt(3) * noise_std  # Uniform [-a, a] has std = a/sqrt(3)
+            self.noise = (torch.rand(self.Y.shape, generator=self.torch_gen) * 2 - 1) * a
+        elif self.noise_type == "laplace":
+            # Laplace(0, b) has variance = 2b^2
+            b = torch.sqrt(noise_var / 2)
+            self.noise = torch.distributions.Laplace(0, b).sample(self.Y.shape)
+        else:
+            raise ValueError(f"Unknown noise type: {self.noise_type}")
+        
+        # Compute empirical SNR (variance ratio)
+        empirical_snr = signal_var / noise_var
+        print(f"SNR: {self.snr}, signal std: {signal_var.sqrt().mean().item()}, noise std: {noise_std.mean().item()}")
+        print(f"Target SNR: {self.snr:.1f} | Empirical SNR: {empirical_snr.mean().item():.1f}")    
+    """       
+    def _generate_noise(self) -> None:
+
+
+
+        
         signal_std = torch.std(self.Y, dim=0)
-        noise_std = signal_std / math.sqrt(self.snr)
+        signal_std = torch.clamp(signal_std, min=1e-5)  # Avoid division by zero
+        noise_std = torch.sqrt(signal_std / self.snr)
+        empirical_snr = torch.std(self.Y, dim=0) / noise_std
+        print(f"Target SNR: {self.snr:.1f} | Empirical SNR: {empirical_snr.mean().item():.1f}")
         if self.noise_type == "gaussian":
             self.noise = torch.randn(self.Y.shape, generator=self.torch_gen) * noise_std
         elif self.noise_type == "uniform":
@@ -183,6 +217,7 @@ class LinearRegressionSingDataset(Dataset):
         else:
             raise ValueError(f"Unknown noise type: {self.noise_type}")
 
+    """       
     #probably useless but keeping for now
     def _edit_feature_matrix(self, new_condition_number: float, new_sing_dist: str = "uniform") -> None:
         """
@@ -208,6 +243,7 @@ if __name__ == "__main__":
         noise_type="gaussian", 
         weight_init="gaussian", 
         seed=46,
+        snr=200
     )
     
 
