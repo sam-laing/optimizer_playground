@@ -154,7 +154,7 @@ if __name__ == "__main__":
             "lr": 0.05, "weight_decay": 0.1, "betas": (0.95, 0.95)
         }),
         "Muon": (Muon, {
-            "lr": 0.0075, "weight_decay": 0.05, "momentum": 0.9
+            "lr": 0.075, "weight_decay": 0.05, "momentum": 0.9
         }),
     }
 

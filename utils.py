@@ -1,7 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from datasets import LinearRegressionDataset, LinearRegressionSingDataset, LogisticRegressionDataset, MnistDataset
+from datasets import LinearRegressionDataset, LinearRegressionSingDataset, LogisticRegressionDataset, MnistDataset, make_loaders
+import torch 
+import torch.nn.functional as F
+from torch import nn
 from optimizers import Muon 
+
 
 
 def plot_training_validation_losses(
@@ -151,4 +155,59 @@ def make_models_and_optimizers(
             optimizers[cfg_name] = optim_class(params=[model.W], **optim_kwargs)
 
     return models, optimizers
+
+def compare_optimizers(
+    optimizers_dict: dict,
+    dataset,
+    config,
+):
+    train_loader, val_loader = make_loaders(
+        dataset,
+        batch_size=config.batch_size,
+        seed=config.data_seed,
+        val_size=config.val_size,
+        shuffle=config.shuffle,
+    )
+
+    models, optimizers = make_models_and_optimizers(
+        dataset,
+        optimizers_dict,
+        model_seed=config.model_seed,
+        device=config.device,
+    )
+
+    losses = {name: [] for name in models.keys()}
+    val_losses = {name: [] for name in models.keys()}
+    for epoch in range(config.epochs):
+        for i, (X, Y) in enumerate(train_loader):
+            X, Y = X.to(config.device), Y.to(config.device)
+            current_losses = {}
+            for name, model in models.items():
+                out = model(X)
+                loss = F.mse_loss(out, Y)
+                current_losses[name] = loss.item()
+                losses[name].append(loss.item())
+
+                optimizers[name].zero_grad()
+                loss.backward()
+                optimizers[name].step()
+
+            loss_str = ", ".join([f"{name}: {loss:.4f}" for name, loss in current_losses.items()])
+            print(f"Epoch {epoch+1}/{config.epochs}, Step {i}, Losses: {loss_str}")
+
+        # Validation
+        for name, model in models.items():
+            val_loss = 0
+            with torch.no_grad():
+                for X_val, Y_val in val_loader:
+                    X_val, Y_val = X_val.to(config.device), Y_val.to(config.device)
+                    out = model(X_val)
+                    val_loss += F.mse_loss(out, Y_val).item()
+            val_loss /= len(val_loader)
+            val_losses[name].append(val_loss)
+        val_loss_str = ", ".join([f"{name}: {val_losses[name][-1]:.4f}" for name in val_losses.keys()])
+        print(f"Epoch {epoch+1}/{config.epochs}, Validation Losses: {val_loss_str}")
+
+    return losses, val_losses
+
 
