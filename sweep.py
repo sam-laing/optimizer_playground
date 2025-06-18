@@ -37,7 +37,7 @@ condition_numbers = [10, 100, 1000]
 snrs = [10, 100, 1000]
 
 results = []
-
+seeds = [1, 2, 3, 4, 5]
 for cond, snr in itertools.product(condition_numbers, snrs):
     for lr, wd, mom in itertools.product(lrs, wds, moms):
         config = Config(

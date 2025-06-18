@@ -6,8 +6,6 @@ import numpy as np
 import math
 from torch import Tensor
 
-
-
 class LinearRegressionSingDataset(Dataset):
     """"
     Mock up artificial data which is ideal for a linear regression problem
@@ -40,8 +38,8 @@ class LinearRegressionSingDataset(Dataset):
         self, dim_input: int, dim_output: int, N_samples: int, 
         noise_type: str = "gaussian", 
         weight_init: str = "gaussian", seed: int = 0, 
-        snr: float = 100, sing_dist: str = "uniform", condition_number: float = 1e6, max_singular_value: float = 1.0, 
-        normalize_features: bool = False,
+        snr: float = 100, sing_dist: str = "uniform", condition_number: float = 1e2, max_singular_value: float = 1.0, 
+        normalize_features: bool = False, scale_up = 1
 
     ):
         super(LinearRegressionSingDataset, self).__init__()
@@ -60,7 +58,7 @@ class LinearRegressionSingDataset(Dataset):
         self.max_singular_value = max_singular_value
         self.condition_number = condition_number
         self.normalize_features = normalize_features
-        
+        self.scale_up = scale_up  
         #randomness should be controlled by a generator to not effect global random state
         self.seed = seed
         self.torch_gen = torch.Generator()
@@ -77,6 +75,7 @@ class LinearRegressionSingDataset(Dataset):
         self.Y += self.noise
 
         if self.normalize_features:
+            # this basically undoes the correlation and condition number shenanigans in any case. 
             self.X = (self.X - self.X.mean(dim=0)) / (self.X.std(dim=0) + 1e-8)
 
         self.data = lambda: {
@@ -96,8 +95,7 @@ class LinearRegressionSingDataset(Dataset):
         N, d = self.N_samples, self.dim_input
         assert N > d, "can't have N <= d ... tall matrix needed"
         
-        #basically generating X = U S V^T while explicitely controlling singular value decomposition
-
+        #basically generating X = U S V^T while explicitely controlling svd
         U = torch.randn(N, d, generator=self.torch_gen)
         self.U, _ = torch.linalg.qr(U, 'reduced')
 
@@ -151,6 +149,7 @@ class LinearRegressionSingDataset(Dataset):
         self.S = torch.zeros(d, d)
         index = torch.arange(d)
         self.S[index, index] = diag
+        self.S *= self.scale_up  
 
         #return feature matrix with jacked up singular values
         self.X = self.U @ self.S @ self.Vh
@@ -173,7 +172,7 @@ class LinearRegressionSingDataset(Dataset):
     def _generate_noise(self) -> None:
         # Compute signal variance (power)
         signal_var = torch.var(self.Y, dim=0)
-        signal_var = torch.clamp(signal_var, min=1e-5)  # Avoid division by zero
+        signal_var = torch.clamp(signal_var, min=1e-7)  
         
         # Correct noise calculation (variance-based)
         noise_var = signal_var / self.snr
@@ -183,7 +182,7 @@ class LinearRegressionSingDataset(Dataset):
         if self.noise_type == "gaussian":
             self.noise = torch.randn(self.Y.shape, generator=self.torch_gen) * noise_std
         elif self.noise_type == "uniform":
-            a = math.sqrt(3) * noise_std  # Uniform [-a, a] has std = a/sqrt(3)
+            a = math.sqrt(3) * noise_std  #uniform [-a, a] has std = a/sqrt(3)
             self.noise = (torch.rand(self.Y.shape, generator=self.torch_gen) * 2 - 1) * a
         elif self.noise_type == "laplace":
             # Laplace(0, b) has variance = 2b^2

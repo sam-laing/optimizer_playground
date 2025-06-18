@@ -26,10 +26,10 @@ class Config:
     n_samples: int = 10_000
     model_seed: int = 9
     snr: float = 100
-    condition_number: float = 100
+    condition_number: float = 1000
     sing_dist: str = "normal"
     cov_strength: float = 0.6
-    normalize_features: bool = True
+    normalize_features: bool = False
     batch_size: int = 10_000
     epochs: int = 15
     max_singular_value: float = 1
@@ -38,6 +38,7 @@ class Config:
     shuffle: bool = True
     device: str = "cpu"
     separate_bias: bool = True
+    scale_up: float = 100  # used for linear regression singular datasets
 
 def loss_function(W, X, Y):
     return F.mse_loss(X @ W, Y)
@@ -81,29 +82,42 @@ def compare_optimizers(
             loss_str = ", ".join([f"{name}: {loss:.4f}" for name, loss in current_losses.items()])
             print(f"Epoch {epoch+1}/{config.epochs}, Step {i}, Losses: {loss_str}")
 
-        # Validation
-        for name, model in models.items():
-            val_loss = 0
-            with torch.no_grad():
-                for X_val, Y_val in val_loader:
-                    X_val, Y_val = X_val.to(config.device), Y_val.to(config.device)
-                    out = model(X_val)
-                    val_loss += F.mse_loss(out, Y_val).item()
-            val_loss /= len(val_loader)
-            val_losses[name].append(val_loss)
-        val_loss_str = ", ".join([f"{name}: {val_losses[name][-1]:.4f}" for name in val_losses.keys()])
-        print(f"Epoch {epoch+1}/{config.epochs}, Validation Losses: {val_loss_str}")
+        
+        if config.val_size != 0.0:
+            for name, model in models.items():
+                val_loss = 0
+                with torch.no_grad():
+                    for X_val, Y_val in val_loader:
+                        X_val, Y_val = X_val.to(config.device), Y_val.to(config.device)
+                        out = model(X_val)
+                        val_loss += F.mse_loss(out, Y_val).item()
+                val_loss /= len(val_loader)
+                val_losses[name].append(val_loss)
+            val_loss_str = ", ".join([f"{name}: {val_losses[name][-1]:.4f}" for name in val_losses.keys()])
+            print(f"Epoch {epoch+1}/{config.epochs}, Validation Losses: {val_loss_str}")
+        
+        if config.val_size == 0.0:
+            val_losses = None
 
     return losses, val_losses
 
 if __name__ == "__main__":
+    dim_input = 750
+    dim_output = 100
+    import math
     config = Config(
-        dim_input=344, dim_output=35,
-        snr=50, condition_number=3, 
-        data_seed=23, model_seed=42,
-        dataset_type="linear_singular",  # Change to "linear", "logistic", or "mnist" as needed
+        dim_input=dim_input, dim_output=dim_output,
+        n_samples=2048,
+        snr=30, condition_number=1e4, 
+        data_seed=20, model_seed=7,
+        dataset_type="linear_singular",  
         noise_type="gaussian", 
-        epochs=25
+        epochs=10, 
+        batch_size=2048,
+        normalize_features=False, 
+        scale_up=1.0,
+        val_size=0.0, 
+        max_singular_value= math.sqrt(60000 / (dim_input + dim_output)),
         )
 
     # Dataset selection
@@ -133,6 +147,7 @@ if __name__ == "__main__":
             condition_number=config.condition_number,
             normalize_features=config.normalize_features,
             max_singular_value=config.max_singular_value,
+            scale_up=config.scale_up
         )
     elif config.dataset_type == "logistic":
         dataset = LogisticRegressionDataset(
@@ -155,13 +170,13 @@ if __name__ == "__main__":
 
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.5, "weight_decay": 0, "momentum": 0.95
+            "lr": 0.1, "weight_decay": 0.1, "momentum": 0.95, 
         }),
         "AdamW": (optim.AdamW, {
-            "lr": 0.1, "weight_decay": 0, "betas": (0.95, 0.95)
+            "lr": 0.1, "weight_decay": 0.1, "betas": (0.95, 0.95)
         }),
         "Muon": (Muon, {
-            "lr": 0.1, "weight_decay": 0, "momentum": 0.95
+            "lr": 0.5, "weight_decay": 0.1, "momentum": 0.9
         }),
     }
 
@@ -170,15 +185,15 @@ if __name__ == "__main__":
         dataset,
         config,
     )
-
     extended_title = (
         f"{config.dataset_type} Model Losses\n"
         f"Dataset: {dataset.__class__.__name__}\n"
         f"Optimizer: {', '.join(optimizers_dict.keys())}\n"
         f"Epochs: {config.epochs}, Batch size: {config.batch_size}, N_samples: {config.n_samples}\n"
-        f"Noise type: {getattr(dataset, 'noise_type', 'N/A')}, SNR: {getattr(dataset, 'snr', 'N/A')}\n"
+        f"Noise type: {getattr(dataset, 'noise_type', 'N/A')}, SNR: {getattr(dataset, 'snr', 'N/A')}, max_s_val: {getattr(dataset, 'max_singular_value', 'N/A')}\n"
         f"Weight init: {getattr(dataset, 'weight_init', 'N/A')}, Seed: {getattr(dataset, 'seed', 'N/A')}\n"
     )
+
     if hasattr(dataset, "condition_number"):
         extended_title += f"Condition number: {dataset.condition_number}, Singular dist: {getattr(dataset, 'sing_dist', 'N/A')}\n"
 
@@ -193,7 +208,7 @@ if __name__ == "__main__":
     plot_training_validation_losses(
         title=extended_title,
         losses=losses,
-        val_losses=None,
+        val_losses=val_losses,
         batch_size=config.batch_size,
         n_samples=config.n_samples,
         val_size=config.val_size,
@@ -203,3 +218,7 @@ if __name__ == "__main__":
         save_path=SAVE_PATH,
         show=False
     )
+    X_cov = dataset.X.T @ dataset.X / dataset.X.shape[0]
+    eigenvalues = torch.linalg.eigvalsh(X_cov)
+    actual_condition = torch.sqrt(eigenvalues.max() / eigenvalues.min())
+    print(f"Actual condition number: {actual_condition}")

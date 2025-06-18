@@ -91,24 +91,6 @@ class LinearRegressionDataset(Dataset):
             return cov
         else:
             raise ValueError(f"Unknown covariance_type: {cov_type}")
-    
-    def _generate_feature_matrix(self, condition_number: float, sing_dist = "uniform") -> Tensor:
-        """
-        generate a feature matrix with a specified condition number
-        make sure that the covariance matrix is positive definite
-        and the other singular values are well spread
-        """
-        N, d = self.N_samples, self.dim_input
-
-        # Generate a random matrix
-        A = torch.randn(N, d, generator=self.torch_gen)
-
-        # Perform SVD
-        U, S, Vh = torch.svd(A)
-
-        #get desired condition number
-
-
 
   
 
@@ -133,11 +115,11 @@ class LinearRegressionDataset(Dataset):
 
         # Initialize weights
         if self.weight_init == "gaussian":
-            self.W_true = torch.randn(self.dim_input + 1, self.dim_output, generator=self.torch_gen)
+            self.W_true = torch.randn(self.dim_input, self.dim_output, generator=self.torch_gen)
         elif self.weight_init == "uniform":
-            self.W_true = torch.rand(self.dim_input + 1, self.dim_output, generator=self.torch_gen)
+            self.W_true = torch.rand(self.dim_input, self.dim_output, generator=self.torch_gen)
         elif self.weight_init == "laplace":
-            self.W_true = torch.randn(self.dim_input + 1, self.dim_output, generator=self.torch_gen)
+            self.W_true = torch.randn(self.dim_input, self.dim_output, generator=self.torch_gen)
             self.W_true = torch.sign(self.W_true) * torch.abs(self.W_true).sqrt()
         else:
             raise ValueError("weight_init must be one of gaussian, uniform, laplace")
