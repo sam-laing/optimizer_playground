@@ -108,7 +108,6 @@ if __name__ == "__main__":
     config = Config(
         dim_input=dim_input, dim_output=dim_output,
         n_samples=2048,
-        snr=30, condition_number=1e4, 
         data_seed=20, model_seed=7,
         dataset_type="linear_singular",  
         noise_type="gaussian", 
@@ -117,7 +116,9 @@ if __name__ == "__main__":
         normalize_features=False, 
         scale_up=1.0,
         val_size=0.0, 
-        max_singular_value= math.sqrt(60000 / (dim_input + dim_output)),
+        condition_number=4, 
+        max_singular_value=  10000, #math.sqrt(60000 / (dim_input + dim_output)),
+        snr=100, 
         )
 
     # Dataset selection
