@@ -93,7 +93,7 @@ class LinearRegressionSingDataset(Dataset):
         and the other singular values are well spread
         """
         N, d = self.N_samples, self.dim_input
-        assert N > d, "can't have N <= d ... tall matrix needed"
+        #assert N > d, "can't have N <= d ... tall matrix needed"
         
         #basically generating X = U S V^T while explicitely controlling svd
         U = torch.randn(N, d, generator=self.torch_gen)
@@ -149,7 +149,6 @@ class LinearRegressionSingDataset(Dataset):
         self.S = torch.zeros(d, d)
         index = torch.arange(d)
         self.S[index, index] = diag
-        self.S *= self.scale_up  
 
         #return feature matrix with jacked up singular values
         self.X = self.U @ self.S @ self.Vh
