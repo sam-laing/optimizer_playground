@@ -208,4 +208,33 @@ def compare_optimizers(
 
     return losses, val_losses
 
+import math
+from torch.optim.lr_scheduler import _LRScheduler
 
+class ConstantThenCosineLR(_LRScheduler):
+    """
+    Starts with constant learning rate for a proportion of steps,
+    then decays with cosine annealing to zero.
+    
+    Args:
+        optimizer (Optimizer): Wrapped optimizer
+        constant_proportion (float): Proportion of training to keep LR constant (0-1)
+        total_steps (int): Total number of training steps
+        last_epoch (int): The index of the last step. Default: -1
+    """
+    def __init__(self, optimizer, constant_proportion, total_steps, last_epoch=-1):
+        self.constant_steps = int(constant_proportion * total_steps)
+        self.cosine_steps = total_steps - self.constant_steps
+        self.total_steps = total_steps
+        super(ConstantThenCosineLR, self).__init__(optimizer, last_epoch)
+        
+    def get_lr(self):
+        if self.last_epoch < self.constant_steps:
+            # Constant phase
+            return [base_lr for base_lr in self.base_lrs]
+        else:
+            # Cosine decay phase
+            current_cosine_step = self.last_epoch - self.constant_steps
+            completion = current_cosine_step / self.cosine_steps
+            cosine_factor = 0.5 * (1 + math.cos(math.pi * completion))
+            return [base_lr * cosine_factor for base_lr in self.base_lrs]

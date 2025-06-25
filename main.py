@@ -37,8 +37,10 @@ class Config:
     val_size: float = 0.2
     shuffle: bool = True
     device: str = "cpu"
+    scale_up: float = 1.0
     separate_bias: bool = True
-    scale_up: float = 100  # used for linear regression singular datasets
+    scheduler: bool = True 
+    constant_proportion: float = 0.3
 
 def loss_function(W, X, Y):
     return F.mse_loss(X @ W, Y)
@@ -63,6 +65,20 @@ def compare_optimizers(
         device=config.device,
     )
 
+    schedulers = {}
+    if hasattr(config, "scheduler") and config.scheduler:
+        from utils import ConstantThenCosineLR
+        steps_per_epoch = len(train_loader)
+        total_steps = config.epochs * steps_per_epoch
+
+        for name, optimizer in optimizers.items():
+            schedulers[name] = ConstantThenCosineLR(
+                optimizer = optimizer,
+                total_steps=total_steps,
+                constant_proportion=config.constant_proportion,
+            )
+
+
     losses = {name: [] for name in models.keys()}
     val_losses = {name: [] for name in models.keys()}
     for epoch in range(config.epochs):
@@ -78,6 +94,9 @@ def compare_optimizers(
                 optimizers[name].zero_grad()
                 loss.backward()
                 optimizers[name].step()
+
+                if hasattr(config, "scheduler") and config.scheduler:
+                    schedulers[name].step()
 
             loss_str = ", ".join([f"{name}: {loss:.4f}" for name, loss in current_losses.items()])
             print(f"Epoch {epoch+1}/{config.epochs}, Step {i}, Losses: {loss_str}")
@@ -102,13 +121,13 @@ def compare_optimizers(
     return losses, val_losses
 
 if __name__ == "__main__":
-    dim_input = 1024
-    dim_output = 256
+    dim_input = 20
+    dim_output = 5
     import math
     config = Config(
         dim_input=dim_input, dim_output=dim_output,
         n_samples=4096,
-        data_seed=52, model_seed=16044,
+        data_seed=2, model_seed=1044,
         dataset_type="linear_singular",  
         noise_type="gaussian", 
         epochs=75, 
@@ -171,7 +190,7 @@ if __name__ == "__main__":
 
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 1.3, "weight_decay": 0.1, "momentum": 0.95, 
+            "lr": 0.05, "weight_decay": 0.1, "momentum": 0.95, 
         }),
         "AdamW": (optim.AdamW, {
             "lr": 0.1, "weight_decay": 0.1, "betas": (0.95, 0.95)
