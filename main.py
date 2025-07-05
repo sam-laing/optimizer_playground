@@ -121,13 +121,13 @@ def compare_optimizers(
     return losses, val_losses
 
 if __name__ == "__main__":
-    dim_input = 20
-    dim_output = 5
+    dim_input = 512
+    dim_output = 256
     import math
     config = Config(
         dim_input=dim_input, dim_output=dim_output,
-        n_samples=4096,
-        data_seed=2, model_seed=1044,
+        n_samples=2048,
+        data_seed=22, model_seed=1044,
         dataset_type="linear_singular",  
         noise_type="gaussian", 
         epochs=75, 
@@ -136,8 +136,10 @@ if __name__ == "__main__":
         scale_up=1.0,
         val_size=0.0, 
         condition_number=100, 
-        max_singular_value=  100,
-        snr=100, 
+        max_singular_value=  10,
+        snr=300,
+        scheduler= True,
+        constant_proportion=0.3, 
         )
 
     # Dataset selection
@@ -190,7 +192,7 @@ if __name__ == "__main__":
 
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.05, "weight_decay": 0.1, "momentum": 0.95, 
+            "lr": 0.8, "weight_decay": 0.1, "momentum": 0.95, 
         }),
         "AdamW": (optim.AdamW, {
             "lr": 0.1, "weight_decay": 0.1, "betas": (0.95, 0.95)

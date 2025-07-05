@@ -31,16 +31,19 @@ class Config:
     shuffle: bool = True
     device: str = "cpu"
     separate_bias: bool = False
-    scheduler: bool = False  
-    constant_proportion: float = 0.3
+    scheduler: bool = True  # Changed to True
+    constant_proportion: float = 0.4  # Changed to 0.4
+    scale_up: float = 1.0
 
 # Hyperparameter settings
-lrs = [1e-3, 1e-1]
+lrs = [1e-3, 1e-2, 1e-1]
 wds = [0.1]   
 moms = [0.9, 0.95]  
 condition_numbers = [10, 100, 1000]
 snrs = [300]
 seeds = [1, 2]
+max_singular_values = [1.0, 5.0, 10.0]  # Now varying max singular values
+use_scheduler = [True, False]  # Whether to use scheduler or not
 
 # Dictionary to store all results, organized by condition number
 all_results = {cond: [] for cond in condition_numbers}
@@ -48,11 +51,20 @@ all_results = {cond: [] for cond in condition_numbers}
 # Dictionary to store best results for each optimizer at each condition number
 best_results = {cond: {} for cond in condition_numbers}
 
-# Run experiments
-print(f"Starting sweep with {len(lrs) * len(wds) * len(moms) * len(condition_numbers) * len(snrs)} configurations")
+# Calculate total configurations for progress tracking
+total_configs = (
+    len(lrs) * len(wds) * len(moms) * len(condition_numbers) * 
+    len(snrs) * len(max_singular_values) * len(use_scheduler)
+)
+print(f"Starting sweep with {total_configs} configurations")
 
-for cond, snr in itertools.product(condition_numbers, snrs):
-    print(f"\nProcessing condition number {cond}, SNR {snr}")
+# Use tqdm for the outer loop to track overall progress
+config_counter = 0
+for cond, snr, max_sv, scheduler in itertools.product(
+    condition_numbers, snrs, max_singular_values, use_scheduler
+):
+    config_counter += 1
+    print(f"\n[{config_counter}/{total_configs}] Processing: cond={cond}, SNR={snr}, max_sv={max_sv}, scheduler={scheduler}")
     
     for lr, wd, mom in itertools.product(lrs, wds, moms):
         print(f"\nTesting lr={lr}, wd={wd}, mom={mom}")
@@ -69,6 +81,9 @@ for cond, snr in itertools.product(condition_numbers, snrs):
                 snr=snr,
                 data_seed=seed,
                 model_seed=seed,
+                max_singular_value=max_sv,
+                scheduler=scheduler,
+                constant_proportion=0.4,  # Fixed at 0.4 as requested
             )
             
             # Setup optimizers
@@ -173,6 +188,15 @@ for cond, snr in itertools.product(condition_numbers, snrs):
                         mean_val_losses[full_key] = stacked_val_losses.mean(axis=0).tolist()
                         std_val_losses[full_key] = stacked_val_losses.std(axis=0).tolist()
         
+        # Create reference config to use for consistent parameters
+        reference_config = Config(
+            condition_number=cond,
+            snr=snr,
+            max_singular_value=max_sv,
+            scheduler=scheduler,
+            constant_proportion=0.4,
+        )
+        
         # Store results for this configuration
         result = {
             "lr": lr,
@@ -180,7 +204,13 @@ for cond, snr in itertools.product(condition_numbers, snrs):
             "momentum": mom,
             "snr": snr,
             "condition_number": cond,
+            "max_singular_value": max_sv,
+            "scheduler": scheduler,
+            "constant_proportion": 0.4,
             "seeds": seeds,
+            "dim_input": reference_config.dim_input,
+            "dim_output": reference_config.dim_output,
+            "n_samples": reference_config.n_samples,
             "mean_losses": mean_losses,
             "std_losses": std_losses,
         }
@@ -215,6 +245,12 @@ for cond, snr in itertools.product(condition_numbers, snrs):
                                 "wd": wd,
                                 "momentum": mom,
                                 "snr": snr,
+                                "max_singular_value": max_sv,
+                                "scheduler": scheduler,
+                                "constant_proportion": 0.4,
+                                "dim_input": reference_config.dim_input,
+                                "dim_output": reference_config.dim_output,
+                                "n_samples": reference_config.n_samples,
                                 "key": full_key,
                                 "mean_losses": mean_losses[full_key],
                                 "std_losses": std_losses[full_key],
@@ -241,6 +277,9 @@ def make_json_serializable(obj):
     else:
         return obj
 
+# Get reference config for global parameters
+reference_config = Config()
+
 # Prepare final results dictionary
 final_output = {
     "hyperparameters": {
@@ -249,14 +288,20 @@ final_output = {
         "moms": moms,
         "condition_numbers": condition_numbers,
         "snrs": snrs,
-        "seeds": seeds
+        "seeds": seeds,
+        "max_singular_values": max_singular_values,
+        "use_scheduler": use_scheduler,
+        "constant_proportion": 0.4,
+        "dim_input": reference_config.dim_input,
+        "dim_output": reference_config.dim_output,
+        "n_samples": reference_config.n_samples,
     },
     "all_results": make_json_serializable(all_results),
     "best_performing": make_json_serializable(best_results)
 }
 
-# Save to file
-output_filename = f"sweep_results_conds{'-'.join(str(c) for c in condition_numbers)}.json"
+# Save to file with descriptive name
+output_filename = f"sweep_results_conds{'-'.join(str(c) for c in condition_numbers)}_maxsv{'-'.join(str(sv) for sv in max_singular_values)}.json"
 with open(output_filename, 'w') as f:
     json.dump(final_output, f, indent=2)
 
@@ -267,5 +312,8 @@ print("\nBest results summary:")
 for cond in condition_numbers:
     print(f"\nCondition number {cond}:")
     for optimizer, result in best_results[cond].items():
-        config = result["config"]
-        print(f"  {optimizer}: final loss = {result['best_final_loss']:.6f} (lr={config['lr']}, wd={config['wd']}, mom={config['momentum']})")
+        if result["config"] is not None:  # Check if any valid result was found
+            config = result["config"]
+            print(f"  {optimizer}: final loss = {result['best_final_loss']:.6f} "
+                  f"(lr={config['lr']}, wd={config['wd']}, mom={config['momentum']}, "
+                  f"max_sv={config['max_singular_value']}, scheduler={config['scheduler']})")
