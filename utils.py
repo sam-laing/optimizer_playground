@@ -62,13 +62,15 @@ def plot_training_validation_losses(
 
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_xlabel("Training Steps", fontsize=12)
+
     ax.set_ylabel("Loss", fontsize=12)
     ax.grid(True, alpha=0.3, linestyle='--')
 
     if ylim:
         ax.set_ylim(*ylim)
-    ax.legend(loc='upper right', frameon=True)
 
+    ax.legend(loc='upper right', frameon=True)
+    #make y axis log
     plt.tight_layout()
 
     if save_path:

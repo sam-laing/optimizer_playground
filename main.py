@@ -121,25 +121,25 @@ def compare_optimizers(
     return losses, val_losses
 
 if __name__ == "__main__":
-    dim_input = 512
-    dim_output = 256
+    dim_input = 64
+    dim_output = 32
     import math
     config = Config(
         dim_input=dim_input, dim_output=dim_output,
-        n_samples=2048,
-        data_seed=22, model_seed=1044,
+        n_samples=1028,
+        data_seed=222, model_seed=1044,
         dataset_type="linear_singular",  
         noise_type="gaussian", 
-        epochs=75, 
-        batch_size=4096,
-        normalize_features=True, 
+        epochs=200, 
+        batch_size=1028,
+        normalize_features=False, 
         scale_up=1.0,
         val_size=0.0, 
-        condition_number=100, 
-        max_singular_value=  10,
-        snr=300,
+        condition_number=100000, 
+        max_singular_value=  70,
+        snr=100,
         scheduler= True,
-        constant_proportion=0.3, 
+        constant_proportion=0.6,
         )
 
     # Dataset selection
@@ -192,13 +192,13 @@ if __name__ == "__main__":
 
     optimizers_dict = {
         "SGD": (optim.SGD, {
-            "lr": 0.8, "weight_decay": 0.1, "momentum": 0.95, 
+            "lr": 0.001, "weight_decay": 0.1, "momentum": 0.95, 
         }),
         "AdamW": (optim.AdamW, {
             "lr": 0.1, "weight_decay": 0.1, "betas": (0.95, 0.95)
         }),
         "Muon": (Muon, {
-            "lr": 0.5, "weight_decay": 0.1, "momentum": 0.9
+            "lr": 0.1, "weight_decay": 0.1, "momentum": 0.9
         }),
     }
 
@@ -207,6 +207,7 @@ if __name__ == "__main__":
         dataset,
         config,
     )
+    print(losses)
     extended_title = (
         f"{config.dataset_type} Model Losses\n"
         f"Dataset: {dataset.__class__.__name__}\n"
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     if os.path.exists(SAVE_PATH):
         i = 1
         while os.path.exists(SAVE_PATH):
-            SAVE_PATH = f"./plots/{config.dataset_type}/{config.dataset_type}_losses_{i}.png"
+            SAVE_PATH = f"./plots/{config.dataset_type}pdf/{config.dataset_type}_losses_{i}.pdf"
             i += 1
 
     plot_training_validation_losses(

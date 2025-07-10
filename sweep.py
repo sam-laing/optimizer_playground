@@ -23,11 +23,11 @@ class Config:
     snr: float = 300
     condition_number: float = 100
     sing_dist: str = "normal"
-    normalize_features: bool = True
-    batch_size: int = 1000
+    normalize_features: bool = False
+    batch_size: int = 4096
     epochs: int = 5
     max_singular_value: float = 5
-    val_size: float = 0.2
+    val_size: float = 0
     shuffle: bool = True
     device: str = "cpu"
     separate_bias: bool = False
@@ -36,14 +36,14 @@ class Config:
     scale_up: float = 1.0
 
 # Hyperparameter settings
-lrs = [1e-3, 1e-2, 1e-1]
+lrs = [ 3e-3,  1e-2, 3e-2, 1e-1,]
 wds = [0.1]   
-moms = [0.9, 0.95]  
+moms = [0.9]  
 condition_numbers = [10, 100, 1000]
 snrs = [300]
 seeds = [1, 2]
-max_singular_values = [1.0, 5.0, 10.0]  # Now varying max singular values
-use_scheduler = [True, False]  # Whether to use scheduler or not
+max_singular_values = [10.0, 100.0]  
+use_scheduler = [True]  
 
 # Dictionary to store all results, organized by condition number
 all_results = {cond: [] for cond in condition_numbers}
@@ -113,7 +113,7 @@ for cond, snr, max_sv, scheduler in itertools.product(
                 losses, val_losses = compare_optimizers(
                     optimizers_dict,
                     dataset,
-                    config,
+                    config,val_losses=None
                 )
                 # Print keys to help with debugging
                 print(f"  Seed {seed} optimizer keys: {list(losses.keys())}")
@@ -301,7 +301,7 @@ final_output = {
 }
 
 # Save to file with descriptive name
-output_filename = f"sweep_results_conds{'-'.join(str(c) for c in condition_numbers)}_maxsv{'-'.join(str(sv) for sv in max_singular_values)}.json"
+output_filename = f"./plots/sweep_results_conds{'-'.join(str(c) for c in condition_numbers)}_maxsv{'-'.join(str(sv) for sv in max_singular_values)}.json"
 with open(output_filename, 'w') as f:
     json.dump(final_output, f, indent=2)
 
